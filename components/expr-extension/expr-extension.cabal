@@ -1,0 +1,169 @@
+cabal-version:       3.0
+-- ^ Cabal package description format spec.
+-- Actual package description below.
+-- See: http://haskell.org/cabal/users-guide/
+
+--
+-- Package identification: name & version.
+--
+name:                expr-extension
+-- Package version should follow the Haskell PVP (https://pvp.haskell.org).
+-- PVP summary:      +-+------- breaking API changes
+--                   | | +----- non-breaking API additions
+--                   | | | +--- code changes with no API change
+version:             0.1.0.0
+
+--
+-- Tell Hackage users a little bit about this package: a one-liner for
+-- the gist of it (synopsis), a longer description, where it fits in
+-- Hackage (category) and where it comes from (homepage).
+--
+synopsis: Tiny example of typed, tagless final interpreters.
+description:
+  An example of "representing typed higher-order languages in a typed
+  metalanguage, along with type-preserving interpretation, compilation
+  and partial evaluation". Gloriously lifted from these excellent
+  lecture notes: http://okmij.org/ftp/tagless-final/course/lecture.pdf
+category:            Example, Expression Problem, Tagless Final
+homepage:            https://github.com/c0c0n3/hasnix
+maintainer:          https://github.com/c0c0n3/hasnix
+
+--
+-- The legalese.
+--
+license:             AGPL-3.0-only
+-- license-file:        LICENSE
+-- copyright:        (c) 2020-2021 Joe Bloggs
+
+
+--
+-- Warn about every dodgy code block under the sun (-Weverything), but
+-- turn a blind eye to:
+-- * Implicit prelude. If you use a Prelude replacement, you may want
+--   to get warned about modules implicitly using the stock Prelude.
+--   Otherwise, this is sort of annoying so we silence it.
+-- * Missing import lists. There are times when I just want to import
+--   most of the goodies from a module without having to write down
+--   each and every one on the import line. So this guy gets silenced
+--   too :-O
+-- * Inferred safe imports. If you turn on Safe Haskell you can still
+--   import a module M not explicitly flagged with Safe or Trustworthy
+--   as long as GHC can infer it's Safe Haskell you're importing. But
+--   next time you compile M could've become unsafe and your build
+--   break. Hence the heads-up. Do I care? No, I'll fix stuff when it
+--   breaks.
+-- * Missing deriving strategies. With this on, GHC will moan if you
+--   use old-school deriving of stock classes (Eq, Show, etc.) but to
+--   get rid of the warning you'll have to turn on the deriving lang
+--   extension and use the `stock` keyword which is (IMHO) overkill.
+-- * Missing local signatures. Buys you a warning if you have a polymorphic
+--   local binding without a signature. Not the best buy?
+--
+-- See:
+-- * http://downloads.haskell.org/~ghc/latest/docs/html/users_guide/using-warnings.html
+-- https://medium.com/mercury-bank/enable-all-the-warnings-a0517bc081c3
+--
+common compilation-warnings
+  ghc-options:         -Weverything
+                       -Wno-implicit-prelude
+                       -Wno-missing-import-lists
+                       -Wno-inferred-safe-imports
+                       -Wno-missing-deriving-strategies
+                       -Wno-missing-local-signatures
+
+
+-- Control release build settings. Turn on with command line option: -frelease
+flag release
+  description: Make a release build.
+  default:             False
+  manual:              True
+
+
+--
+-- Use a common stanza to add release build settings on request.
+-- * Turn any warning into a compilation error---anal retentivness!
+-- * Optimise code as much as possible---longer compilation times!
+--
+common release-options
+  if flag(release)
+     ghc-options:      -Werror
+                       -O2
+
+
+--
+-- Use a common stanza to share lib build info with exe & benchmark.
+-- This way we can have internal modules (i.e. not exported) and also
+-- import any of them inside these programs.
+--
+common lib-build-info
+  -- Directories containing source files.
+  hs-source-dirs:      src
+  -- Modules included in this library but not exported.
+  -- other-modules:
+  -- Other library packages from which modules are imported.
+  -- Since we're using Nix to manage dependencies, technically there's
+  -- no need to specify package versions but you actually should if the
+  -- lib is supposed to get published on Hackage and Cabal will moan
+  -- about missing version bounds if you run `cabal check`.
+  build-depends:       base
+                     , text
+                     -- deps on other project packages
+                     , expr
+                     , util
+  -- Base language which the package is written in.
+  default-language:    Haskell2010
+
+
+library
+  import:              lib-build-info
+  import:              compilation-warnings
+  import:              release-options
+  -- Modules exported by the library.
+  exposed-modules:     Expr
+  -- Turn on strict type safety across the board. As Simon Marlow puts it:
+  --   "For typical Haskell programmers, using {-# LANGUAGE Safe #-}
+  --    will be like -Wall: something that is considered good practice
+  --    from a hygiene point of view."
+  -- See:
+  -- * https://wiki.haskell.org/Safe_Haskell
+  -- * http://downloads.haskell.org/~ghc/latest/docs/html/users_guide/safe_haskell.html
+  default-extensions:  Safe
+
+
+executable expro
+  import:              lib-build-info
+  import:              compilation-warnings
+  import:              release-options
+  hs-source-dirs:      app
+  -- We add a special 'Paths_expr_extension' placeholder to ask Cabal
+  -- to generate that module for us and put in it the package version
+  -- declared above.
+  autogen-modules:     Paths_expr_extension
+  other-modules:       Paths_expr_extension
+                     , Version
+                     -- have to list again any modules imported from the lib
+                     , Expr
+  main-is:             Main.hs
+  default-extensions:  Safe
+  ghc-options:         -Wno-prepositive-qualified-module
+  -- NOTE. -Wno-prepositive-qualified-module
+  -- Not sure where this comes from since it isn't in the GHC manual, but
+  -- without it, we get:
+  --   Paths_expr_extension.hs:10:8: warning: [-Wprepositive-qualified-module]
+  --   Found ‘qualified’ in prepositive position
+  --   Suggested fix: place  ‘qualified’ after the module name instead.
+  -- Uh?!
+
+
+benchmark expr-bench
+  import:              lib-build-info
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      benchmark
+  main-is:             Main.hs
+  other-modules:       ExprBuilder
+                     -- have to list again any modules imported from the lib
+                     , Expr
+  build-depends:       criterion
+  ghc-options:         -O2
+-- NOTE. It doesn't look like Criterion can run benchmarks in parallel.
+-- * https://www.reddit.com/r/haskell/comments/2m0pv6/force_criterion_to_benchmark_sequentially_for/

@@ -1,0 +1,30 @@
+-- Cabal project description.
+-- See: http://haskell.org/cabal/users-guide/
+
+-- Include all `.cabal` files found in every sub-dir of the dir where
+-- this file sits. (Don't recurse sub-dirs.)
+packages: */*.cabal
+
+-- Parallelise builds using as many CPUs as there are available on
+-- this box.
+jobs: $ncpus
+
+-- not needed when using Nix for managing deps?
+-- index-state: HEAD
+
+-- NOTE
+-- 1. GHC options. At the moment there's no way to factor out options
+-- common to all **local** packages unless you also want them to apply
+-- to each and every lib your packages depend on. See:
+-- - https://cabal.readthedocs.io/en/latest/cabal-project.html#package-configuration-options
+-- - https://github.com/haskell/cabal/issues/3579
+-- 2. GHC extensions. It doesn't look like there's a project equivalent
+-- to `default-extensions`. This could be useful to enable a set of benign
+-- extensions to be used across the board by all modules within each package.
+-- E.g. I'd like to use `UnicodeSyntax` everywhere without having to put
+-- that in each and every Cabal package file within the project.
+
+
+-- -Werror
+-- Turn any warning into a compilation error. Use `-Wwarn=<wflag>` to
+-- stop treating specific warnings as errors.
