@@ -23,8 +23,3 @@ jobs: $ncpus
 -- extensions to be used across the board by all modules within each package.
 -- E.g. I'd like to use `UnicodeSyntax` everywhere without having to put
 -- that in each and every Cabal package file within the project.
-
-
--- -Werror
--- Turn any warning into a compilation error. Use `-Wwarn=<wflag>` to
--- stop treating specific warnings as errors.

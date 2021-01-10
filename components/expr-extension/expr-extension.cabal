@@ -82,6 +82,7 @@ flag release
 --
 -- Use a common stanza to add release build settings on request.
 -- * Turn any warning into a compilation error---anal retentivness!
+--   (Use `-Wwarn=<wflag>` to stop treating specific warnings as errors.)
 -- * Optimise code as much as possible---longer compilation times!
 --
 common release-options
