@@ -34,39 +34,38 @@ module Handler.Expr
   )
 where
 
-import GHC.TypeLits (Symbol)
-import Servant (Capture, CaptureAll, Get, Handler, JSON, ReqBody, Server
-               , (:<|>) ((:<|>)), (:>))
+import Data.Proxy (Proxy(Proxy))
+import Servant (Capture, CaptureAll, Get, Handler, Link, JSON, ReqBody, Server
+               , safeLink, (:<|>) ((:<|>)), (:>))
 
-import Expr (evalF, lit, viewF)
+import Expr (evalF, viewF)
 import Handler.Redirect (PostRedirect, RedirectResponse, redirect)
 import Handler.Types.ExprTerm (ExprTerm(..), fromJsonExpr)
 import Handler.Types.JsonExpr (JsonExpr)
 import Util
 
 
-toRedirectUrl ∷ ExprTerm → Text
-toRedirectUrl (Term expr) = "/expr/" <> lit result <> "/" <> sexpr
-               --      TODO ^ share with ExprEndpoint
-               --           ^ use URI builder
-               --           ^ how to encode into type system that this URL
-               --             has the same format as the one in MkEndpoint?
+type GetRoute = "expr" :>
+  Capture "result" Int :> CaptureAll "sexpr" Text :> Get '[JSON] Int
+
+type PostRoute = "expr" :>
+  ReqBody '[JSON] JsonExpr :> PostRedirect 201 Link
+
+type ExprEndpoint = GetRoute :<|> PostRoute
+
+-- TODO output an absolute URI in the Location header.
+toRedirectUrl ∷ ExprTerm → Link
+toRedirectUrl (Term expr) = safeLink getRoute getRoute result [sexpr]
   where
+    getRoute        = Proxy ∷ Proxy GetRoute
     (sexpr, result) = (viewF expr, evalF expr)
--- NOTE ^ this works b/c we made `expr` polymorphic so the first occurrence
--- on the right is a Text whereas the second is an Int.
-
-type MkEndpoint (name ∷ Symbol) = name :>
-  (    Capture "result" Int :> CaptureAll "sexpr" Text :> Get '[JSON] Int
-  :<|> ReqBody '[JSON] JsonExpr :> PostRedirect 201 Text
-  )
-
-type ExprEndpoint = MkEndpoint "expr"
+-- NOTE   ^ this works b/c we made `expr` polymorphic so the first
+-- occurrence on the right is a Text whereas the second is an Int.
 
 getHandler ∷ Int → [Text] → Handler Int
 getHandler result _ = pure result
 
-postHanlder ∷ JsonExpr → Handler (RedirectResponse Text)
+postHanlder ∷ JsonExpr → Handler (RedirectResponse Link)
 postHanlder = redirect ∘ toRedirectUrl ∘ fromJsonExpr
 
 exprHandler ∷ Server ExprEndpoint
