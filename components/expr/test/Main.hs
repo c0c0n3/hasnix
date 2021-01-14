@@ -10,5 +10,10 @@ allTests = testGroup "Expr Tests"
   [ I.tests
   ]
 
+{-
+    $ cd components
+    $ cabal test expr      # or
+    $ cabal run expr-test  # to see Tasty's output
+-}
 main ∷ IO ()
 main = defaultMain allTests

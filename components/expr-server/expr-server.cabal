@@ -6,7 +6,7 @@ cabal-version:       3.0
 --
 -- Package identification: name & version.
 --
-name:                expr-extension
+name:                expr-server
 -- Package version should follow the Haskell PVP (https://pvp.haskell.org).
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
@@ -18,12 +18,11 @@ version:             0.1.0.0
 -- the gist of it (synopsis), a longer description, where it fits in
 -- Hackage (category) and where it comes from (homepage).
 --
-synopsis: Tiny example of typed, tagless final interpreters.
+synopsis: Expr REST API.
 description:
-  An example of "representing typed higher-order languages in a typed
-  metalanguage, along with type-preserving interpretation, compilation
-  and partial evaluation". Gloriously lifted from these excellent
-  lecture notes: http://okmij.org/ftp/tagless-final/course/lecture.pdf
+  An example of a REST API for our typed, tagless final interpreters.
+  In the box, a simple solution to the de-serialisation problem lifted
+  from the masters: http://okmij.org/ftp/tagless-final/course/lecture.pdf
 category:            Example, Expression Problem, Tagless Final
 homepage:            https://github.com/c0c0n3/hasnix
 maintainer:          https://github.com/c0c0n3/hasnix
@@ -70,6 +69,28 @@ common compilation-warnings
                        -Wno-inferred-safe-imports
                        -Wno-missing-deriving-strategies
                        -Wno-missing-local-signatures
+                       -- Ignore missed specialisations since GHC spits out
+                       -- one gazillion of those in most places where we use
+                       -- Aeson and Servant.
+                       -Wno-all-missed-specialisations
+                       -- Ignore Safe Haskell warnings. We can't do Safe Haskell
+                       -- easily here b/c Aeson, Servant, and Wai aren't flagged
+                       -- as Safe or Trustworthy. We could ask GHC to trust them
+                       -- but it's too much of a mission.
+                       -Wno-safe
+                       -Wno-unsafe
+                       -Wno-missing-safe-haskell-mode
+                       -- The next one is a weird one we get on the Paths auto
+                       -- generted module (see below). Not sure where this comes
+                       -- from since it isn't in the GHC manual, but without it,
+                       -- we get:
+                       --   Paths_expr_server.hs:10:8: warning:
+                       --   [-Wprepositive-qualified-module]
+                       --   Found ‘qualified’ in prepositive position
+                       --   Suggested fix: place ‘qualified’ after the module
+                       --   name instead.
+                       -- Uh?!
+                       -Wno-prepositive-qualified-module
 
 
 -- Control release build settings. Turn on with command line option: -frelease
@@ -92,24 +113,37 @@ common release-options
 
 
 --
--- Use a common stanza to share lib build info with exe & benchmark.
--- This way we can have internal modules (i.e. not exported) and also
--- import any of them inside these programs.
+-- Use a common stanza to share lib build info with the exe.
 --
 common lib-build-info
   -- Directories containing source files.
   hs-source-dirs:      src
+  -- We add a special 'Paths_expr_server' placeholder to ask Cabal
+  -- to generate that module for us and put in it the package version
+  -- declared above. Notice how hyphens in the package name get replaced
+  -- by underscores.
+  autogen-modules:     Paths_expr_server
   -- Modules included in this library but not exported.
-  -- other-modules:
+  other-modules:       Handler.Expr
+                     , Handler.Redirect
+                     , Handler.Version
+                     , Handler.Types.ExprTerm
+                     , Handler.Types.JsonExpr
+                     , Handler.Types.Version
+                     -- have to include autogen-modules here too
+                     , Paths_expr_server
   -- Other library packages from which modules are imported.
   -- Since we're using Nix to manage dependencies, technically there's
   -- no need to specify package versions but you actually should if the
   -- lib is supposed to get published on Hackage and Cabal will moan
   -- about missing version bounds if you run `cabal check`.
   build-depends:       base
-                     , text
+                     , aeson
+                     , servant-server
+                     , vector
+                     , unordered-containers
                      -- deps on other project packages
-                     , expr
+                     , expr-extension
                      , util
   -- Base language which the package is written in.
   default-language:    Haskell2010
@@ -120,37 +154,16 @@ library
   import:              compilation-warnings
   import:              release-options
   -- Modules exported by the library.
-  exposed-modules:     Expr
-  -- Turn on strict type safety across the board. As Simon Marlow puts it:
-  --   "For typical Haskell programmers, using {-# LANGUAGE Safe #-}
-  --    will be like -Wall: something that is considered good practice
-  --    from a hygiene point of view."
-  -- See:
-  -- * https://wiki.haskell.org/Safe_Haskell
-  -- * http://downloads.haskell.org/~ghc/latest/docs/html/users_guide/safe_haskell.html
-  default-extensions:  Safe
+  exposed-modules:     API
 
 
-executable expro
+executable servo
   import:              lib-build-info
   import:              compilation-warnings
   import:              release-options
   hs-source-dirs:      app
-  other-modules:       Expr
+  other-modules:       API
                     -- ^ have to list again any modules imported from the lib
   main-is:             Main.hs
-  default-extensions:  Safe
-
-
-benchmark expr-bench
-  import:              lib-build-info
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      benchmark
-  main-is:             Main.hs
-  other-modules:       ExprBuilder
-                     -- have to list again any modules imported from the lib
-                     , Expr
-  build-depends:       criterion
-  ghc-options:         -O2
--- NOTE. It doesn't look like Criterion can run benchmarks in parallel.
--- * https://www.reddit.com/r/haskell/comments/2m0pv6/force_criterion_to_benchmark_sequentially_for/
+  build-depends:       wai
+                     , warp

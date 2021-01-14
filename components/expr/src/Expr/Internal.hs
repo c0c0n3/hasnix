@@ -1,4 +1,4 @@
-{-# LANGUAGE UnicodeSyntax #-}
+{-# LANGUAGE UnicodeSyntax     #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Expr.Internal
   ( Expr (..)
