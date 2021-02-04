@@ -34,7 +34,7 @@ plainExpr ∷ [Int] → Int
 plainExpr = expr (+) (*) 0
 
 taglessExpr ∷ [Int] → Int
-taglessExpr = expr add mult 0 . map lit
+taglessExpr = expr add mult 0 ∘ map lit
 
 printExpr ∷ [Int] → Text
-printExpr = expr add mult mempty . map lit
+printExpr = expr add mult mempty ∘ map lit

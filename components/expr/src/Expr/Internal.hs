@@ -1,5 +1,10 @@
 {-# LANGUAGE UnicodeSyntax     #-}
 {-# LANGUAGE OverloadedStrings #-}
+--
+-- The library implementation. The stuff we export from this module
+-- is only available to other code within the same package so we can
+-- have an easier time testing the functionality.
+--
 module Expr.Internal
   ( Expr (..)
   , eval
