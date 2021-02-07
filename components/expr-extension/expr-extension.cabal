@@ -61,7 +61,7 @@ license:             AGPL-3.0-only
 --
 -- See:
 -- * http://downloads.haskell.org/~ghc/latest/docs/html/users_guide/using-warnings.html
--- https://medium.com/mercury-bank/enable-all-the-warnings-a0517bc081c3
+-- * https://medium.com/mercury-bank/enable-all-the-warnings-a0517bc081c3
 --
 common compilation-warnings
   ghc-options:         -Weverything
@@ -85,6 +85,11 @@ flag release
 --   (Use `-Wwarn=<wflag>` to stop treating specific warnings as errors.)
 -- * Optimise code as much as possible---longer compilation times!
 --
+-- NOTE. Usually -O2 isn't really a game-changer and you should actually
+-- test it makes your program go faster. In fact, `cabal check` will
+-- moan about this setting since it'll make compilation time longer
+-- for all your package users. Perhaps not a big deal, well as long
+-- as you don't relase the package on Hackage...
 common release-options
   if flag(release)
      ghc-options:      -Werror
@@ -101,13 +106,14 @@ common lib-build-info
   hs-source-dirs:      src
   -- Modules included in this library but not exported.
   -- other-modules:
-  -- Other library packages from which modules are imported.
-  -- Since we're using Nix to manage dependencies, technically there's
-  -- no need to specify package versions but you actually should if the
-  -- lib is supposed to get published on Hackage and Cabal will moan
-  -- about missing version bounds if you run `cabal check`.
-  build-depends:       base
-                     , text
+  -- Haskell packages from which we import modules. Specify the exact
+  -- PVP version we developed & tested with so we know where we stand
+  -- but accept newer compatible (according to the PVP) versions. E.g.
+  -- `base ^>= 4.14.1.0` (same as `base >= 4.14.1.0 && < 4.15`) tells
+  -- Cabal to consider any version up to (but less than) `4.15` when
+  -- figuring out the build plan.
+  build-depends:       base ^>= 4.14.1.0
+                     , text ^>= 1.2.4.1
                      -- deps on other project packages
                      , expr
                      , util
@@ -150,7 +156,7 @@ benchmark expr-bench
   other-modules:       ExprBuilder
                      -- have to list again any modules imported from the lib
                      , Expr
-  build-depends:       criterion
+  build-depends:       criterion ^>= 1.5.9.0
   ghc-options:         -O2
 -- NOTE. It doesn't look like Criterion can run benchmarks in parallel.
 -- * https://www.reddit.com/r/haskell/comments/2m0pv6/force_criterion_to_benchmark_sequentially_for/
