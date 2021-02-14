@@ -9,8 +9,23 @@ packages: */*.cabal
 -- this box.
 jobs: $ncpus
 
--- not needed when using Nix for managing deps?
--- index-state: HEAD
+-- Pin the Hackage index state to make sure we get reproducible builds
+-- within Cabal. Starting from Cabal 3, Nix-style local builds are the
+-- default, but to figure out a build plan, Cabal needs an input dependency
+-- graph of all packages known to man. It pulls that from Hackage when
+-- you run `cabal update`, but obviously the graph might be different
+-- between two `update` calls so potentially we could also wind up with
+-- slightly different build plans. To avoid that, we tell Cabal to query
+-- the Hackage index as it was at a given point in time, e.g. the timestamp
+-- Cabal prints out when you run `cabal update`.
+--
+-- NOTE
+-- 1. Nix-style builds != Nix integration. If you want to integrate Nix
+-- in your Cabal workflow, read up about it in the Cabal manual.
+-- 2. Multiple repos. Cabal 3.4 supports multiple package repos, have a
+-- look at the manual if you need that.
+--
+index-state: 2021-02-07T15:40:32Z
 
 -- NOTE
 -- 1. GHC options. At the moment there's no way to factor out options
