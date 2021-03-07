@@ -18,12 +18,15 @@ in rec {
     projectName = project.name;
     componentsDir = project.componentsDir;
     haskellPkgsOverrides = hself: hsuper: {
-      base-unicode-symbols =
-        hself.callHackage "base-unicode-symbols" "0.2.4.1" {};
-        # nixpin has base-unicode-symbols-0.2.4.2
+#      hedgehog = hself.callHackage "hedgehog" "1.0.4" {};
+      # nixpin has: hedgehog-1.0.3
+#      base-unicode-symbols =
+#        hself.callHackage "base-unicode-symbols" "0.2.4.1" {};
+#        # nixpin has base-unicode-symbols-0.2.4.2
     };
-    devTools = [ pinnedPkgs.haskellPackages.cabal-plan ];
-    # runtimeDeps = [ pinnedPkgs.hello ];
+    devTools = ps: [ ps."${project.name}".haskell.cabal-plan ];
+       #[ pinnedPkgs.haskellPackages.cabal-plan ];
+    runtimeExtras = ps: with ps; [ hello ];
   };
 
 # TODO fn to generate plain docker imgs for each Haskell exe

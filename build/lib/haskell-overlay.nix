@@ -9,8 +9,10 @@
   # Nix packages from which to derive this overlay.
   pkgs
 
-  # The GHC version to use. It determines the Haskell Nix package set from
-  # which all our Haskell deps come from.
+  # The GHC version to use. It determines the Haskell Nix package set in
+  # `pkgs` from which all our Haskell deps come from.
+  # NOTE. We need to know this since there's one Haskell package set in
+  # Nixpkgs for each supported GHC version.
 , ghcVersion
 
   # The name of the Haskell project to build. This overlay adds the various
@@ -25,13 +27,21 @@
   # Nix package set identified by `ghcVersion`.
 , haskellPkgsOverrides ? hself: hsuper: {}
 
-  # Optional list of derivations to add to the dev shell.
+  # Optional function to list extra derivations to add to the dev shell.
+  # The `ps` argument points to this overlay, so besides adding any derivation
+  # in the `pkgs` argument above, you can also add packages from the Haskell
+  # set this overlay builds, e.g. `ps.my-project.haskell.cabal-plan` picks
+  # the `cabal-plan` derivation from the Haskell package set that this overlay
+  # uses (i.e. the one identified by `ghcVersion`) which isn't necessarily
+  # the same as the one in `pkgs.haskellPackages`.
   # See `devShell` attribute below.
-, devTools ? []
+, devTools ? ps: []
 
-  # Optional list of derivations to add to the exe shell.
+  # Optional function to list extra derivations to add to the exe shell.
+  # The `ps` argument points to this overlay, read explanation above for
+  # how to use it.
   # See `exeShell` attribute below.
-, runtimeDeps ? []
+, runtimeExtras ? ps: []
 }:
 
 let
@@ -95,15 +105,16 @@ in self: super:
     # - https://github.com/NixOS/nixpkgs/blob/nixpkgs-unstable/pkgs/development/haskell-modules/make-package-set.nix
     devShell = self."${projectName}".haskell.shellFor {
       packages = ps: ps._projPkgs_;  # (*)
-      nativeBuildInputs = [ self.cabal-install ] ++ devTools;
+      nativeBuildInputs = [ self.cabal-install ] ++ (devTools self);
     };
     # NOTE ps points to self."${projectName}".haskell
 
     # A derivation to start a Nix shell with all the Haskell exes built from
-    # the project's local packages, plus any other runtime dependency listed
-    # in the `runtimeDeps` input param.
+    # the project's local packages, plus any other derivation listed in the
+    # `runtimeExtras` input param.
     exeShell = self.mkShell {
-      buildInputs = runtimeDeps ++ self."${projectName}".haskell._projPkgs_;
+      buildInputs = self."${projectName}".haskell._projPkgs_
+                  ++ (runtimeExtras self);
     };
 
   };
