@@ -26,29 +26,6 @@
   # An optional Haskell overlay function to override Haskell packages in the
   # Nix package set identified by `ghcVersion`.
 , haskellPkgsOverrides ? hself: hsuper: {}
-
-  # Optionally generate a Hoogle database for all the dependencies in the
-  # dev shell as well as local Haskell packages. The Haddock docs of each
-  # local package get built and become available for searching through
-  # Hoogle---the Hoogle command gets added to your shell too.
-  # See `devShell` attribute below.
-, devWithHoogle ? false
-
-  # Optional function to list extra derivations to add to the dev shell.
-  # The `ps` argument points to this overlay, so besides adding any derivation
-  # in the `pkgs` argument above, you can also add packages from the Haskell
-  # set this overlay builds, e.g. `ps.my-project.haskell.cabal-plan` picks
-  # the `cabal-plan` derivation from the Haskell package set that this overlay
-  # uses (i.e. the one identified by `ghcVersion`) which isn't necessarily
-  # the same as the one in `pkgs.haskellPackages`.
-  # See `devShell` attribute below.
-, devTools ? ps: []
-
-  # Optional function to list extra derivations to add to the exe shell.
-  # The `ps` argument points to this overlay, read explanation above for
-  # how to use it.
-  # See `exeShell` attribute below.
-, runtimeExtras ? ps: []
 }:
 
 let
@@ -74,9 +51,18 @@ let
   # add an extra attribute `_projPkgs_` to the set this function returns
   # that contains only the project's own packages.
 
+  # Customise the Haskell local packages in this overlay, e.g. do a build
+  # with a Cabal flag turned on. Apply the override settings to all local
+  # packages.
+  customiseProjPkgs = self: overrideSpec:
+    let
+      override = overrideNixDrv overrideSpec;
+    in
+      map override self."${projectName}".haskell._projPkgs_;
+
   # Build the argument to the `haskell.shellFor` function we use to create
-  # a dev shell---see `devShell` attribute below.
-  devShellSpec = self: {
+  # a dev shell---see `mkDevShell` function below.
+  devShellSpec = self: devWithHoogle: devTools: {
     nativeBuildInputs = [ self.cabal-install ] ++ (devTools self);
 
     packages = ps:                                                 # (1)
@@ -102,15 +88,19 @@ let
   # (e.g. Criterion) in one of your packages, that dep will make it into the
   # dev shell's GHC DB.
 
+  # Build the argument to the `mkShell` function we use to create a shell
+  # with the project executable components---see `mkExeShell` function below.
+  exeShellSpec = self: runtimeExtras: overrideSpec: {
+    buildInputs = (customiseProjPkgs self overrideSpec) ++ (runtimeExtras self);
+  };
+
 in self: super:
 {
   # TODO clean sources!!
-  # TODO release builds!!
 
   # Nix overlay content. All the goodies we add sit inside a set named after
   # the input project name to avoid polluting the main Nix packages namespace
-  # `pkgs` and keep all project derivations in one place, so you access them
-  # with e.g. `pkgs.my-project.haskell.my-pkg-2` or `pkgs.my-project.devShell`.
+  # `pkgs` and keep all project derivations in one place.
   "${projectName}" = {
 
     # This set contains all the Haskell packages in the specified GHC Nixpkgs
@@ -122,31 +112,60 @@ in self: super:
         haskellPkgsOverrides hself hsuper // haskellProjDrvs hsuper;
     };
 
-    # This is a subset of `haskell` above, containing only the project's
-    # Haskell local packages.
-    components = drvListToSet self."${projectName}".haskell._projPkgs_;
+    # Build a set containing only the project's Haskell local packages.
+    # The `overrideSpec` param lets you customise the packages. This set
+    # is the same argument to `overrideNixDrv` and the settings get applied
+    # to all local packages, e.g. specify a Cabal flag with which to build
+    # them.
+    mkComponents = overrideSpec:
+      drvListToSet (customiseProjPkgs self overrideSpec);
 
-    # This set contains a derivation for each exe built from the project's
+    # Build a set containing a derivation for each exe built from the project's
     # Haskell local packages. It could obviously be empty if the there are
     # no executable components. Also, it won't include any test or benchmark
-    # exes.
-    executables = drvListToExeSet self."${projectName}".haskell._projPkgs_;
+    # exes. The `overrideSpec` param is the same as for `mkComponents`.
+    mkExecutables = overrideSpec:
+      drvListToExeSet (customiseProjPkgs self overrideSpec);
 
-    # A derivation to start a Nix shell with GHC, Cabal, any additional dev
-    # tool you'll need and all project dependencies found in the Cabal files
+    # Build a derivation to start a Nix shell with GHC, Cabal, any additional
+    # dev tool you'll need and all project dependencies found in the Cabal files
     # used to build the local packages in the `haskell` set above. Notice the
     # Nix environment won't have the local packages themselves in it. Check out
     # the `shellFor` function in Nixpkgs if this is Greek to you:
     # - https://github.com/NixOS/nixpkgs/blob/nixpkgs-unstable/pkgs/development/haskell-modules/make-package-set.nix
-    devShell = self."${projectName}".haskell.shellFor (devShellSpec self);
+    mkDevShell = {
+      # Optionally generate a Hoogle database for all the Haskell dependencies
+      # as well as the local Haskell packages. The Haddock docs of each local
+      # package get built and become available for searching through Hoogle and
+      # the Hoogle command gets added to your shell too.
+        devWithHoogle ? false
 
-    # A derivation to start a Nix shell with all the Haskell exes built from
-    # the project's local packages, plus any other derivation listed in the
-    # `runtimeExtras` input param.
-    exeShell = self.mkShell {
-      buildInputs = self."${projectName}".haskell._projPkgs_
-                  ++ (runtimeExtras self);
-    };
+      # Optional function to list extra derivations to add to the dev shell.
+      # The `ps` argument points to this overlay, so besides adding any drv
+      # in the `pkgs` argument above, you can also add packages from the Haskell
+      # set this overlay builds, e.g. `ps.my-project.haskell.cabal-plan` picks
+      # the `cabal-plan` derivation from the Haskell package set that this
+      # overlay uses (i.e. the one identified by `ghcVersion`) which isn't
+      # necessarily the same as the one in `pkgs.haskellPackages`.
+      , devTools ? ps: []
+      }:
+        self."${projectName}".haskell.shellFor
+          (devShellSpec self devWithHoogle devTools);
+
+    # Build a derivation to start a Nix shell with all the Haskell exes built
+    # from the project's local packages.
+    mkExeShell = {
+      # Optional function to list extra derivations to add to the shell.
+      # The `ps` argument points to this overlay, read the explanation of
+      # `devTools` above for how to use it.
+        runtimeExtras ? ps: []
+
+      # Optional set to customise the local exes. This set is the same argument
+      # to `overrideNixDrv` and the settings get applied to all local exes,
+      # e.g. specify a Cabal flag with which to build them.
+      , overrideSpec ? {}
+      }:
+        self.mkShell (exeShellSpec self runtimeExtras overrideSpec);
 
   };
 

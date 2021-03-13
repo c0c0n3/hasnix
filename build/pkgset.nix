@@ -24,10 +24,6 @@ in rec {
 #        hself.callHackage "base-unicode-symbols" "0.2.4.1" {};
 #        # nixpin has base-unicode-symbols-0.2.4.2
     };
-    devWithHoogle = true;
-    devTools = ps: [ ps."${project.name}".haskell.cabal-plan ];
-       #[ pinnedPkgs.haskellPackages.cabal-plan ];
-    runtimeExtras = ps: with ps; [ hello ];
   };
 
 # TODO fn to generate plain docker imgs for each Haskell exe
@@ -35,5 +31,21 @@ in rec {
   p = import nixpin {
     overlays = [ projectOverlay ];
   };
+
+  sh = p.hasnix.mkDevShell {
+    devWithHoogle = true;
+    devTools = ps: [ ps."${project.name}".haskell.cabal-plan ];
+       #[ pinnedPkgs.haskellPackages.cabal-plan ];
+  };
+
+  esh = p.hasnix.mkExeShell {
+    runtimeExtras = ps: with ps; [ hello ];
+    overrideSpec = {
+      withFlags = [ "release" ];
+    };
+  };
+
+  comps = p.hasnix.mkComponents {};
+  exes = p.hasnix.mkExecutables { withFlags = [ "release" ]; };
 
 }
