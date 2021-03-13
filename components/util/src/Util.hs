@@ -1,9 +1,9 @@
 --
 -- Convenience module to re-export goodies we use across the board
 -- within the project:
--- * 'Text' type
--- * Unicode versions of common Haskell operators to add a touch of
---   style to our code :-)
+--  * 'Text' type
+--  * Unicode versions of common Haskell operators to add a touch of
+--    style to our code :-)
 --
 module Util
   ( Text

@@ -17,7 +17,7 @@
 -- also considering we didn't make 'JsonExpr' extensible either and that
 -- would need tweaking too when adding a new interpreter.  Anyhoo, to
 -- the brave soul seeking a mind-boggling solution, I say read:
--- *  http://okmij.org/ftp/tagless-final/course/lecture.pdf
+--  *  http://okmij.org/ftp/tagless-final/course/lecture.pdf
 --
 module Handler.Types.ExprTerm
   ( ExprTerm(..)
