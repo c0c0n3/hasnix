@@ -24,6 +24,7 @@ in rec {
 #        hself.callHackage "base-unicode-symbols" "0.2.4.1" {};
 #        # nixpin has base-unicode-symbols-0.2.4.2
     };
+    devWithHoogle = true;
     devTools = ps: [ ps."${project.name}".haskell.cabal-plan ];
        #[ pinnedPkgs.haskellPackages.cabal-plan ];
     runtimeExtras = ps: with ps; [ hello ];

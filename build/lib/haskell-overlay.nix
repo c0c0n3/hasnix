@@ -27,6 +27,13 @@
   # Nix package set identified by `ghcVersion`.
 , haskellPkgsOverrides ? hself: hsuper: {}
 
+  # Optionally generate a Hoogle database for all the dependencies in the
+  # dev shell as well as local Haskell packages. The Haddock docs of each
+  # local package get built and become available for searching through
+  # Hoogle---the Hoogle command gets added to your shell too.
+  # See `devShell` attribute below.
+, devWithHoogle ? false
+
   # Optional function to list extra derivations to add to the dev shell.
   # The `ps` argument points to this overlay, so besides adding any derivation
   # in the `pkgs` argument above, you can also add packages from the Haskell
@@ -46,17 +53,17 @@
 
 let
   inherit (import ./cabal-pkgs.nix { inherit pkgs; })
-    toNixDrvs drvListToSet drvListToExeSet;
+    drvListToSet drvListToExeSet overrideNixDrv toNixDrvs;
 
   # Add the project's Haskell local packages found in the components directory
   # to the Haskell overlay we're going to build for the project. Take a Haskell
   # package to be any sub-directory with a properly named Cabal file in it---see
   # `toNixDrvs` for the details. Add a convenience `_projPkgs_` attribute to
   # the returned set listing just the project derivations.
-  haskellProjDrvs = hself:
+  haskellProjDrvs = hsuper:
     let
       projPkgs = toNixDrvs { baseDir = componentsDir;
-                             callCabal2nix = hself.callCabal2nix;
+                             callCabal2nix = hsuper.callCabal2nix;
                            };
     in
       projPkgs // { _projPkgs_ = builtins.attrValues projPkgs; };  # (*)
@@ -66,6 +73,34 @@ let
   # easy way to pick just the project's own packages out of `projPkgs`, we
   # add an extra attribute `_projPkgs_` to the set this function returns
   # that contains only the project's own packages.
+
+  # Build the argument to the `haskell.shellFor` function we use to create
+  # a dev shell---see `devShell` attribute below.
+  devShellSpec = self: {
+    nativeBuildInputs = [ self.cabal-install ] ++ (devTools self);
+
+    packages = ps:                                                 # (1)
+      let
+        override = overrideNixDrv { withTests = true;
+                                    withBenches = true;            # (2)
+                                    withDocs = devWithHoogle;
+                                  };
+      in
+        map override ps._projPkgs_;
+
+    doBenchmark = true;                                            # (2)
+    withHoogle = devWithHoogle;
+  };
+  # NOTE
+  # 1. ps points to self."${projectName}".haskell
+  # 2. `shellFor` doesn't bring in benchmark deps. Well, there's a knob to
+  # ask for them (`doBenchmark`) but it doesn't look like it works unless
+  # you also explicitly override the derivation attributes to include
+  # benchmarks. It doesn't seem there's any side-effects to turning benchmarks
+  # on if a package doesn't have any, so we can blindly turn them on for
+  # every project package to make sure that if you do have a benchmark dep
+  # (e.g. Criterion) in one of your packages, that dep will make it into the
+  # dev shell's GHC DB.
 
 in self: super:
 {
@@ -84,7 +119,7 @@ in self: super:
     # with a properly named Cabal file in it---see `toNixDrvs` for the details.
     haskell = self.haskell.packages."${ghcVersion}".override {
       overrides = hself: hsuper:
-        haskellPkgsOverrides hself hsuper // haskellProjDrvs hself;
+        haskellPkgsOverrides hself hsuper // haskellProjDrvs hsuper;
     };
 
     # This is a subset of `haskell` above, containing only the project's
@@ -103,11 +138,7 @@ in self: super:
     # Nix environment won't have the local packages themselves in it. Check out
     # the `shellFor` function in Nixpkgs if this is Greek to you:
     # - https://github.com/NixOS/nixpkgs/blob/nixpkgs-unstable/pkgs/development/haskell-modules/make-package-set.nix
-    devShell = self."${projectName}".haskell.shellFor {
-      packages = ps: ps._projPkgs_;  # (*)
-      nativeBuildInputs = [ self.cabal-install ] ++ (devTools self);
-    };
-    # NOTE ps points to self."${projectName}".haskell
+    devShell = self."${projectName}".haskell.shellFor (devShellSpec self);
 
     # A derivation to start a Nix shell with all the Haskell exes built from
     # the project's local packages, plus any other derivation listed in the
