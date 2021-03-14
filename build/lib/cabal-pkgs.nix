@@ -8,7 +8,7 @@ let
   inherit (pkgs.lib.attrsets) mapAttrs;
   inherit (pkgs.lib.filesystem) haskellPathsInDir;
   inherit (pkgs.haskell.lib) doBenchmark dontBenchmark doCheck dontCheck
-    doHaddock dontHaddock enableCabalFlag;
+    doHaddock dontHaddock enableCabalFlag overrideSrc;
   stockCallCabal2nix = pkgs.haskellPackages.callCabal2nix;
 in rec {
 
@@ -68,9 +68,26 @@ in rec {
     # toNixDrvs { baseDir = /my/project/components; }
     # => { pkg1 = <pkg1 drv>; pkg3 = <pkg3 drv>; }
     #
-    toNixDrvs = { baseDir, callCabal2nix ? stockCallCabal2nix }:
+    toNixDrvs =
+        { # Absolute path to the base directory containing the Cabal package
+          # directories.
+          baseDir
+          # Optionally override the stock `cabal2nix` with a different version.
+          # Default: `pkgs.haskellPackages.callCabal2nix`.
+        , callCabal2nix ? stockCallCabal2nix
+          # Optional function (path -> path) to filter out unwanted files
+          # from the derivation's source directory, e.g. files git ignores.
+          # Those files get excluded from the lot used to build the derivation.
+          # You can build such a filter with e.g. the `cleanSourceWith` from
+          # `lib.sources` (which is usually a better choice than the built-in
+          # `filterSource`) or use something like
+          # - https://github.com/hercules-ci/gitignore.nix
+        , sourceFilter ? (x: x)
+        }:
       let
-        toDrv = pkgName: pkgDirAbsPath: callCabal2nix pkgName pkgDirAbsPath {};
+        filterSrc = drv: overrideSrc drv { src = sourceFilter drv.src; };
+        toDrv = pkgName: pkgDirAbsPath:
+            filterSrc (callCabal2nix pkgName pkgDirAbsPath {});
       in
         mapAttrs toDrv (haskellPathsInDir baseDir);  # (*)
     # NOTE

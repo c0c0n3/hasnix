@@ -26,6 +26,27 @@
   # An optional Haskell overlay function to override Haskell packages in the
   # Nix package set identified by `ghcVersion`.
 , haskellPkgsOverrides ? hself: hsuper: {}
+
+  # Optional function (path -> path) to filter out unwanted files from the
+  # directories containing the Haskell local packages, e.g. files git ignores.
+  # This stops Nix from rebuilding stuff whenever any of those non-source
+  # files change---e.g. an editor's config file.
+  # The filter gets applied to each directory under `componentsDir`. You can
+  # build such a filter with e.g. the `cleanSourceWith` from `lib.sources`
+  # (which is usually a better choice than the built-in `filterSource`) or
+  # use something like
+  # - https://github.com/hercules-ci/gitignore.nix
+  # Here's a silly example of using `cleanSourceWith` to filter out any file
+  # called "catchme":
+  #
+  #   inherit (pkgs.lib.sources) cleanSourceWith;
+  #   sourceFilter = src: cleanSourceWith {
+  #     inherit src;
+  #     filter = path: type:
+  #        !(type == "regular" && baseNameOf path == "catchme");
+  #   };
+  #
+, sourceFilter ? (x: x)
 }:
 
 let
@@ -41,6 +62,7 @@ let
     let
       projPkgs = toNixDrvs { baseDir = componentsDir;
                              callCabal2nix = hsuper.callCabal2nix;
+                             inherit sourceFilter;
                            };
     in
       projPkgs // { _projPkgs_ = builtins.attrValues projPkgs; };  # (*)
@@ -96,8 +118,6 @@ let
 
 in self: super:
 {
-  # TODO clean sources!!
-
   # Nix overlay content. All the goodies we add sit inside a set named after
   # the input project name to avoid polluting the main Nix packages namespace
   # `pkgs` and keep all project derivations in one place.
